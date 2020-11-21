@@ -5,9 +5,9 @@ import (
 	"encoding/csv"
 	"math/rand"
 	"net/http"
-	"strconv"
-	"strings"
 	"bufio"
+	"strings"
+	"strconv"
 	"fmt"
 	"net"
 	"os"
@@ -48,6 +48,8 @@ func (p *Perceptron) initData() {
 	for i:=0; i<len(p.Data[0].Inputs); i++{
 		p.Weights = append(p.Weights,rand.Float64()+0.5)
 	}
+
+	p.Umbral = 0.3
 }
 
 func (p *Perceptron) get(w http.ResponseWriter, r *http.Request) {
@@ -72,44 +74,98 @@ func (p *Perceptron) get(w http.ResponseWriter, r *http.Request) {
 //	// complete
 //}
 
-var hostname string = "localhost:8000"
-var remotehost string = "localhost:8001"
+var serverport string = "localhost:8000"
+var nodes = []string{
+	"localhost:8001",
+	"localhost:8002",
+	"localhost:8003",
+	"localhost:8004",
+	"localhost:8005",
+}
 
-func waitForResult(){
-	ln, _ := net.Listen("tcp", hostname)
-	defer ln.Close()
-	for {
-		conn, _ := ln.Accept()
-		go handlerResult(conn)
+func send(p Perceptron) {
+	for id:=0; id<1; id++{
+		var object Perceptron
+		object.Weights = p.Weights
+		object.Data = append(object.Data,p.Data[id])
+		object.Umbral = p.Umbral
+		cont := 0
+		for _,node := range(nodes){
+			conn, _ := net.Dial("tcp", node)
+			defer conn.Close()	
+			encoder := json.NewEncoder(conn)
+			encoder.Encode(object)	
+			fmt.Fprintf(conn,"%d\n",cont)
+			cont += 5
+		}
+		ch <- object
 	}
 }
 
-func handlerResult(conn net.Conn) {
+func WaitForResult(){
+	ln, _ := net.Listen("tcp", serverport)
+	defer ln.Close()
+	for {
+		conn, _ := ln.Accept()
+		go handlerListen(conn)
+	}
+}
+
+var f float64 = 0.0
+var countnodes int = 0
+
+func handlerListen(conn net.Conn) {
 	defer conn.Close()
 	r := bufio.NewReader(conn)
 	str, _ := r.ReadString('\n')
-	num, _ := strconv.Atoi(strings.TrimSpace(str))
+	num, _ := strconv.ParseFloat(strings.TrimSpace(str),64)
+	f += num
 
-	fmt.Println("Result: %d",num)
+	countnodes++
+
+	if countnodes == 5{
+		p:= <- ch
+		close(ch)
+		fmt.Println(p.Weights)
+		p = PerceptronAlgorithm(f,p)
+		fmt.Println("---------------------------------------------")
+		fmt.Println(p.Weights)
+		perceptron.Weights = p.Weights
+		countnodes = 0
+		f = 0
+	}
 }
 
-func send(p Perceptron,id int) {
-	conn, _ := net.Dial("tcp", remotehost)
-	defer conn.Close()
+func PerceptronAlgorithm(f float64,p Perceptron) Perceptron{
+	f += p.Umbral
+	var result int = 0
+	if f <= 0{
+		result = -1
+	} else {
+		result = 1
+	}
 
-	encoder := json.NewEncoder(conn)
-	encoder.Encode(p)
+	if result != p.Data[0].Outputs{
+		for i:=0; i<len(p.Weights);i++{
+			p.Weights[i] += float64(p.Data[0].Outputs*p.Data[0].Inputs[i])
+		}
+		p.Umbral += float64(p.Data[0].Outputs)
+	}
 
-	fmt.Fprintf(conn,"%d\n%d\n",id,len(p.Weights))
+	return p
 }
 
 var perceptron Perceptron
+var ch chan Perceptron
 
 func main(){
 	perceptron.initData()
 	http.HandleFunc("/dataset",perceptron.get)
 
-	send(perceptron,0)
+	ch = make(chan Perceptron,1)
+
+	go send(perceptron)
+	go WaitForResult()
 
 	http.ListenAndServe(":9000",nil)
 }

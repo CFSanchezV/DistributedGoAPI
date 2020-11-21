@@ -6,12 +6,12 @@ import (
 	"net"
 	"os"
 	"bufio"
-	"strconv"
 	"strings"
+	"strconv"
 )
 
 const (
-	serverport = 8000
+	serverport = "localhost:8000"
 )
 
 type Perceptron struct {
@@ -25,19 +25,13 @@ type Data struct {
 	Outputs int		`json:"outputs"`
 }
 
-var remotehost string
-
 func main(){
 	bIn := bufio.NewReader(os.Stdin)
 	fmt.Print("Current Port: ")
 	port, _ := bIn.ReadString('\n')
 	hostname := fmt.Sprintf("localhost:%s", strings.TrimSpace(port))
 
-	fmt.Print("Remote Port: ")
-	remoteport, _ := bIn.ReadString('\n')
-	remotehost = fmt.Sprintf("localhost:%s", strings.TrimSpace(remoteport))
-
-	fmt.Println("Listening")
+	fmt.Println("Listening...")
 
 	ln, _ := net.Listen("tcp", hostname)
 	defer ln.Close()
@@ -53,27 +47,24 @@ func handlerListen(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
 	var perceptron Perceptron
 	decoder.Decode(&perceptron)
-	fmt.Println(perceptron)
 
 	r := bufio.NewReader(conn)
-
 	str, _ := r.ReadString('\n')
-	id, _ := strconv.Atoi(strings.TrimSpace(str))
-	fmt.Printf("Current ID %d\n", id)
+	num, _ := strconv.Atoi(strings.TrimSpace(str))
 
-	str2, _ := r.ReadString('\n')
-	id2, _ := strconv.Atoi(strings.TrimSpace(str2))
-	fmt.Printf("Total Iterations %d\n", id2)
-
-	//send(perceptron)
+	var f float64 = 0
+	n := len(perceptron.Weights)
+	for i:=num; i<num+5;i++{
+		if i < n{
+			f += float64(perceptron.Data[0].Inputs[i])*perceptron.Weights[i]
+		}
+	}
+	fmt.Println(f)
+	send(f)
 }
 
-func send(p Perceptron,n int) {
-	conn, _ := net.Dial("tcp", remotehost)
+func send(f float64) {
+	conn, _ := net.Dial("tcp", serverport)
 	defer conn.Close()
-
-	encoder := json.NewEncoder(conn)
-	encoder.Encode(p)
-
-	fmt.Fprintf(conn,"%d\n",n)
+	fmt.Fprintf(conn,"%f\n",f)
 }
