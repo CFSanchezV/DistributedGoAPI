@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"io/ioutil"	
 )
 
 type Perceptron struct {
@@ -63,16 +64,22 @@ func (p *Perceptron) get(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonbytes)
 }
 
-//func (p *Perceptron) post(w http.ResponseWriter, r *http.Request) {
-//	bodybytes,err := ioutil.ReadAll(r.Body)
-//	defer r.Body.Close()
-//
-//	if err != nil { 
-//		w.WriteHeader(http.StatusInternalServerError)
-//		w.Write([]byte(err.Error()))
-//	}
-//	// complete
-//}
+func (p *Perceptron) post(w http.ResponseWriter, r *http.Request) {
+	bodyBytes,err:=ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil { 
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	}
+	var data Data
+	err = json.Unmarshal(bodyBytes,&data)
+	if err != nil { 
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+	}
+	p.Data=append(p.Data,data)
+	p.Weights = append(p.Weights,rand.Float64()+0.5)	
+}
 
 var serverport string = "localhost:8000"
 var nodes = []string{
@@ -160,8 +167,9 @@ var ch chan Perceptron
 
 func main(){
 	perceptron.initData()
-	http.HandleFunc("/dataset",perceptron.get)
-
+	http.HandleFunc("/dataset/get",perceptron.get)
+	http.HandleFunc("/dataset/post",perceptron.post)
+	
 	ch = make(chan Perceptron,1)
 
 	go send(perceptron)
