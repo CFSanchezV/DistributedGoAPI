@@ -2,69 +2,158 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"net"
-	"os"
-	"bufio"
+	"encoding/csv"
+	"math/rand"
 	"strings"
 	"strconv"
-)
-
-const (
-	serverport = "localhost:8000"
+	"bufio"
+	"time"
+	"net"
+	"fmt"
+	"os"
 )
 
 type Perceptron struct {
 	Data []Data			`json:"data"`
 	Weights []float64 	`json:"weights"`
 	Umbral float64		`json:"umbral"`
+	Epochs int			`json:"epochs"`
 }
 
 type Data struct {
-	Inputs []int	`json:"inputs"`
-	Outputs int		`json:"outputs"`
+	Inputs []float64	`json:"inputs"`
+	Output float64		`json:"output"`
 }
 
+
+func (p *Perceptron) Init() {
+	file,_ := os.Open("mushrooms-cleaned.csv")
+	reader := csv.NewReader(file)
+	objects,_ := reader.ReadAll()
+
+	for _,arr := range objects {
+		var data Data
+		for j,val := range arr {
+			if j > 0{
+				data.Inputs = append(data.Inputs,float64(val[0]))
+			} else {
+				if val == "e"{
+					data.Output = 1
+				} else {
+					data.Output = -1
+				} 
+			}
+		}
+		p.Data = append(p.Data,data)
+	}
+
+	for i:=0; i<len(p.Data[0].Inputs); i++{
+		rand.Seed(time.Now().UnixNano())
+		p.Weights = append(p.Weights,rand.Float64()+0.5)
+	}
+}
+
+func (p *Perceptron) Train() {
+	for i := range(p.Data){
+		f := 0.0
+		for j := range(p.Data[i].Inputs){
+			f += p.Data[i].Inputs[j]*p.Weights[j]
+		}
+		f += p.Umbral
+		if f <= 0 { f = -1 } else { f = 1 }
+		if f != p.Data[i].Output{
+			p.UpdateWeights(i)
+		}
+	}
+}
+
+func (p *Perceptron) UpdateWeights(id int){
+	for i:= range(p.Weights){
+		p.Weights[i] += p.Data[id].Output*p.Data[id].Inputs[i]
+	}
+	p.Umbral += p.Data[id].Output
+}
+
+func (p *Perceptron) Predict(inputs []float64) string{
+	f:= 0.0
+	for i:= range(inputs){
+		f += inputs[i]*p.Weights[i]
+	}
+	f += p.Umbral
+	if f <= 0 {
+		return "poisonous"
+	} else {
+		return "edible"
+	}
+}
+
+func Handler(conn net.Conn) {
+	defer conn.Close()
+	<-ch
+	r := bufio.NewReader(conn)
+	str, _ := r.ReadString('\n')
+	var input [] float64
+	json.Unmarshal([]byte(str),&input)
+	fmt.Println("input has been received")
+	result := perceptron.Predict(input)
+	Send(result)
+}
+
+func Send(result string){
+	conn, _ := net.Dial("tcp",serverport)
+	defer conn.Close()
+	fmt.Fprintf(conn,"%s\n",port)
+	fmt.Fprintf(conn,"%s\n",result)
+}
+
+
+var perceptron Perceptron
+var serverport string
+var port string
+var ch chan bool
+
 func main(){
+	go perceptron.Init()
+
 	bIn := bufio.NewReader(os.Stdin)
-	fmt.Print("Current Port: ")
-	port, _ := bIn.ReadString('\n')
-	hostname := fmt.Sprintf("localhost:%s", strings.TrimSpace(port))
+	fmt.Print("Puerto del nodo actual:")
+	port, _ = bIn.ReadString('\n')
+	port = strings.TrimSpace(port)
+	hostname := fmt.Sprintf("localhost:%s", port)
 
-	fmt.Println("Listening...")
+	fmt.Print("Puerto del servidor:")
+	remoteport, _ := bIn.ReadString('\n')
+	remoteport = strings.TrimSpace(remoteport)
+	serverport = fmt.Sprintf("localhost:%s", remoteport)
 
-	ln, _ := net.Listen("tcp", hostname)
+	fmt.Print("Umbral para el perceptron:")
+	str, _ := bIn.ReadString('\n')
+	umbral,_ := strconv.ParseFloat(strings.TrimSpace(str),64)
+	perceptron.Umbral = umbral
+
+	fmt.Print("Epocas de entrenamiento:")
+	str, _ = bIn.ReadString('\n')
+	epochs, _ := strconv.Atoi(strings.TrimSpace(str))
+	perceptron.Epochs = epochs
+
+	ch = make(chan bool,1)
+	it:=0
+	fmt.Println("...preparando entrenamiento...")
+	go func(){
+		for it < perceptron.Epochs {
+			perceptron.Train()
+			time.Sleep(300*time.Nanosecond)
+			it++
+		}
+		ch <- true
+		close(ch)
+		fmt.Println("...entrenamiento finalizado!")
+	}()
+
+	ln, _ := net.Listen("tcp",hostname)
 	defer ln.Close()
 	for {
 		conn, _ := ln.Accept()
-		go handlerListen(conn)
+		go Handler(conn)
 	}
-}
-
-func handlerListen(conn net.Conn) {
-	defer conn.Close()
-
-	decoder := json.NewDecoder(conn)
-	var perceptron Perceptron
-	decoder.Decode(&perceptron)
-
-	r := bufio.NewReader(conn)
-	str, _ := r.ReadString('\n')
-	num, _ := strconv.Atoi(strings.TrimSpace(str))
-
-	var f float64 = 0
-	n := len(perceptron.Weights)
-	for i:=num; i<num+5;i++{
-		if i < n{
-			f += float64(perceptron.Data[0].Inputs[i])*perceptron.Weights[i]
-		}
-	}
-	fmt.Println(f)
-	send(f)
-}
-
-func send(f float64) {
-	conn, _ := net.Dial("tcp", serverport)
-	defer conn.Close()
-	fmt.Fprintf(conn,"%f\n",f)
 }
