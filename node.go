@@ -46,9 +46,9 @@ func (p *Perceptron) Init() {
 		p.Data = append(p.Data,data)
 	}
 
-	for i:=0; i<len(p.Data[0].Inputs); i++{
-		rand.Seed(time.Now().UnixNano())
-		p.Weights = append(p.Weights,rand.Float64()+0.5)
+	rand.Seed(time.Now().UnixNano())
+	for i:=0; i<len(p.Data[0].Inputs); i++{		
+		p.Weights = append(p.Weights,rand.Float64()+float64(rand.Intn(5)+1))
 	}
 }
 
@@ -110,6 +110,8 @@ var perceptron Perceptron
 var serverport string
 var port string
 var ch chan bool
+
+
 
 func main(){
 	go perceptron.Init()

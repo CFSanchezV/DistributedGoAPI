@@ -20,6 +20,7 @@ var input []float64			// __ último input ingresado
 var countnodes int = 0		// __ auxiliar que valida la llegada de las salidas de todos los nodos
 var countedible int = 0		// __ auxiliar para contar salidas comestibles de los nodos
 var countpoisonous int = 0	// __ auxiliar para contar salidas venenosas de los nodos
+var resultado string        // __ Mensjae de salida del algoritmo 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +63,6 @@ func post(w http.ResponseWriter, r *http.Request) {
 	for i:= range(j.Inputs){
 		in = append(in,float64(j.Inputs[i][0]))
 	}
-	fmt.Println(in)
 	Send(in)
 }
 
@@ -97,10 +97,17 @@ func Handler(conn net.Conn) {
 
 	str,_ := r.ReadString('\n')
 	output,_ := strconv.Atoi(strings.TrimSpace(str))
-	if output == -1 {countpoisonous++} else {countedible++}
+
+	if output == -1{
+		resultado="Venenoso"
+		countpoisonous++
+	} else {
+		resultado="Comestible"
+		countedible++
+	}
 
 	fmt.Println("__________")
-	fmt.Println("Información del puerto ",port,": resultado:",output)
+	fmt.Println("Información del puerto ",port,": resultado:",resultado)
 
 	countnodes++
 	if countnodes == len(nodes){
