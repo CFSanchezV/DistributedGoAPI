@@ -25,7 +25,6 @@ type Data struct {
 	Output float64		`json:"output"`
 }
 
-
 func (p *Perceptron) Init() {
 	file,_ := os.Open("mushrooms-cleaned.csv")
 	reader := csv.NewReader(file)
@@ -74,16 +73,16 @@ func (p *Perceptron) UpdateWeights(id int){
 	p.Umbral += p.Data[id].Output
 }
 
-func (p *Perceptron) Predict(inputs []float64) string{
+func (p *Perceptron) Predict(inputs []float64) int{
 	f:= 0.0
 	for i:= range(inputs){
 		f += inputs[i]*p.Weights[i]
 	}
 	f += p.Umbral
 	if f <= 0 {
-		return "poisonous"
+		return -1
 	} else {
-		return "edible"
+		return 1
 	}
 }
 
@@ -94,16 +93,16 @@ func Handler(conn net.Conn) {
 	str, _ := r.ReadString('\n')
 	var input [] float64
 	json.Unmarshal([]byte(str),&input)
-	fmt.Println("input has been received")
+	fmt.Println("Entrada recibida y procesandola.")
 	result := perceptron.Predict(input)
 	Send(result)
 }
 
-func Send(result string){
+func Send(result int){
 	conn, _ := net.Dial("tcp",serverport)
 	defer conn.Close()
 	fmt.Fprintf(conn,"%s\n",port)
-	fmt.Fprintf(conn,"%s\n",result)
+	fmt.Fprintf(conn,"%d\n",result)
 }
 
 
@@ -115,30 +114,36 @@ var ch chan bool
 func main(){
 	go perceptron.Init()
 
+	fmt.Println("__________")
+	fmt.Println("Ingrese los puertos para el nodo.")
+
 	bIn := bufio.NewReader(os.Stdin)
-	fmt.Print("Puerto del nodo actual:")
+	fmt.Print("Actual: ")
 	port, _ = bIn.ReadString('\n')
 	port = strings.TrimSpace(port)
 	hostname := fmt.Sprintf("localhost:%s", port)
 
-	fmt.Print("Puerto del servidor:")
+	fmt.Print("Servidor: ")
 	remoteport, _ := bIn.ReadString('\n')
 	remoteport = strings.TrimSpace(remoteport)
 	serverport = fmt.Sprintf("localhost:%s", remoteport)
 
-	fmt.Print("Umbral para el perceptron:")
+	fmt.Println("__________")
+	fmt.Println("Ingrese valores para el algoritmo.")
+
+	fmt.Print("Umbral: ")
 	str, _ := bIn.ReadString('\n')
 	umbral,_ := strconv.ParseFloat(strings.TrimSpace(str),64)
 	perceptron.Umbral = umbral
 
-	fmt.Print("Epocas de entrenamiento:")
+	fmt.Print("Epocas: ")
 	str, _ = bIn.ReadString('\n')
 	epochs, _ := strconv.Atoi(strings.TrimSpace(str))
 	perceptron.Epochs = epochs
 
 	ch = make(chan bool,1)
 	it:=0
-	fmt.Println("...preparando entrenamiento...")
+
 	go func(){
 		for it < perceptron.Epochs {
 			perceptron.Train()
@@ -147,9 +152,11 @@ func main(){
 		}
 		ch <- true
 		close(ch)
-		fmt.Println("...entrenamiento finalizado!")
 	}()
 
+	
+	fmt.Println("__________")
+	fmt.Println("Escuchando...")
 	ln, _ := net.Listen("tcp",hostname)
 	defer ln.Close()
 	for {
