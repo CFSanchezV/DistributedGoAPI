@@ -30,7 +30,7 @@ head(mushrooms)
 
 ## Arquitectura
 
-![](./res/nn.PNG)
+![](./res/perceptron.png)
 
 Un boceto de la red neuronal simple que consiste en una capa de entrada, una oculta y una de salida. La red recibe 22 entradas correspondientes a las características de un hongo. La salida es un valor binario que indica si el hongo es venenoso o no.
 
