@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
+// Perceptron - algoritmo de IA
 type Perceptron struct {
 	Data    []Data    `json:"data"`
 	Weights []float64 `json:"weights"`
@@ -20,11 +22,47 @@ type Perceptron struct {
 	Epochs  int       `json:"epochs"`
 }
 
+// Data - data a procesar
 type Data struct {
 	Inputs []float64 `json:"inputs"`
 	Output float64   `json:"output"`
 }
 
+// InitDownload - inicializacion con descarga
+func (p *Perceptron) InitDownload() {
+	resp, err := http.Get("https://github.com/stedy/Machine-Learning-with-R-datasets/raw/master/mushrooms.csv")
+	if err != nil {
+		panic("Error cargando datos de URL")
+	}
+	reader := csv.NewReader(resp.Body)
+	objects, _ := reader.ReadAll()
+
+	for i, arr := range objects {
+		if i == 0 {
+			continue
+		}
+		var data Data
+		for j, val := range arr {
+			if j > 0 {
+				data.Inputs = append(data.Inputs, float64(val[0]))
+			} else {
+				if val == "e" {
+					data.Output = 1
+				} else {
+					data.Output = -1
+				}
+			}
+		}
+		p.Data = append(p.Data, data)
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < len(p.Data[0].Inputs); i++ {
+		p.Weights = append(p.Weights, rand.Float64()+float64(rand.Intn(5)+1))
+	}
+}
+
+// Init - inicializacion sin descarga
 func (p *Perceptron) Init() {
 	file, _ := os.Open("mushrooms-cleaned.csv")
 	reader := csv.NewReader(file)
@@ -52,6 +90,7 @@ func (p *Perceptron) Init() {
 	}
 }
 
+// Train - entrenamiento de neurona
 func (p *Perceptron) Train() {
 	for i := range p.Data {
 		f := 0.0
@@ -70,6 +109,7 @@ func (p *Perceptron) Train() {
 	}
 }
 
+// UpdateWeights - actualizar pesos
 func (p *Perceptron) UpdateWeights(id int) {
 	for i := range p.Weights {
 		p.Weights[i] += p.Data[id].Output * p.Data[id].Inputs[i]
@@ -77,6 +117,7 @@ func (p *Perceptron) UpdateWeights(id int) {
 	p.Umbral += p.Data[id].Output
 }
 
+// Predict - predecir clase
 func (p *Perceptron) Predict(inputs []float64) int {
 	f := 0.0
 	for i := range inputs {
@@ -90,6 +131,7 @@ func (p *Perceptron) Predict(inputs []float64) int {
 	}
 }
 
+// Handler - handle HTTP request
 func Handler(conn net.Conn) {
 	defer conn.Close()
 	<-ch
@@ -102,6 +144,7 @@ func Handler(conn net.Conn) {
 	Send(result)
 }
 
+// Send - enviar
 func Send(result int) {
 	conn, _ := net.Dial("tcp", serverport)
 	defer conn.Close()
@@ -115,7 +158,8 @@ var port string
 var ch chan bool
 
 func main() {
-	go perceptron.Init()
+	fmt.Println("Descargando dataset de https://github.com/stedy/Machine-Learning-with-R-datasets/raw/master/mushrooms.csv...")
+	go perceptron.InitDownload()
 
 	fmt.Println("__________")
 	fmt.Println("Ingrese los puertos para el nodo.")
